@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Singleton E‑Commerce Demo</title>
+  <style>
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f7fa;color:#111}
+    header{background:#2563eb;color:#fff;padding:16px;display:flex;align-items:center;justify-content:space-between}
+    header h1{margin:0;font-size:20px}
+    .container{display:grid;grid-template-columns:1fr 300px;gap:16px;padding:16px}
+    .products{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+    .card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);display:flex;flex-direction:column}
+    .card img{width:100%;height:140px;object-fit:cover;border-radius:6px}
+    .card h3{margin:8px 0 4px;font-size:16px}
+    .card .btn{background:#2563eb;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;margin-top:auto}
+    aside{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);height:fit-content}
+    .cart-item{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .cart-item img{width:50px;height:50px;object-fit:cover;border-radius:4px}
+    .muted{color:#666;font-size:13px}
+    footer{text-align:center;padding:12px;color:#666;font-size:13px}
+    @media(max-width:900px){.container{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Singleton E‑Commerce</h1>
+    <div id="userBalance">Balance: ₹0</div>
+  </header>
+
+  <div class="container">
+    <main>
+      <section class="products" id="productGrid"></section>
+    </main>
+    <aside>
+      <h2>Your Cart</h2>
+      <div id="cartList"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div>Total: <span id="cartTotal">₹0</span></div>
+        <button id="checkoutBtn" class="btn">Checkout</button>
+      </div>
+    </aside>
+  </div>
+
+  <footer>Demo E‑Commerce Website with Singleton eCommerceServer</footer>
+
+  <script>
+    /***********************
+     * eCommerceServer (Singleton)
+     ***********************/
+    (function(){
+      const _token = Symbol('private');
+
+      class eCommerceServer{
+        static #instance = null;
+
+        constructor(token){
+          if(token !== _token){
+            throw new Error('Use eCommerceServer.getInstance() instead of new.');
+          }
+          this.products = [
+            {id:'p1',title:'Laptop',price:50000,img:'https://picsum.photos/seed/lap/400/300'},
+            {id:'p2',title:'Headphones',price:2000,img:'https://picsum.photos/seed/head/400/300'},
+            {id:'p3',title:'Phone',price:25000,img:'https://picsum.photos/seed/ph/400/300'}
+          ];
+          this.cart = {};
+          this.userBalance = 0;
+        }
+
+        static getInstance(){
+          if(!eCommerceServer.#instance){
+            eCommerceServer.#instance = new eCommerceServer(_token);
+          }
+          return eCommerceServer.#instance;
+        }
+
+        seedBalance(amount){
+          this.userBalance += amount;
+          return this.userBalance;
+        }
+
+        addToCart(pid){
+          this.cart[pid] = (this.cart[pid]||0)+1;
+        }
+
+        removeFromCart(pid){
+          delete this.cart[pid];
+        }
+
+        getCartItems(){
+          return Object.entries(this.cart).map(([id,qty])=>{
+            const p = this.products.find(x=>x.id===id);
+            return {...p,qty};
+          });
+        }
+
+        getTotal(){
+          return this.getCartItems().reduce((s,it)=>s+it.price*it.qty,0);
+        }
+
+        checkout(){
+          const total=this.getTotal();
+          if(total>this.userBalance){
+            return {success:false,message:'Insufficient balance'};
+          }
+          this.userBalance-=total;
+          this.cart={};
+          return {success:true,message:'Checkout successful'};
+        }
+      }
+      window.eCommerceServer=eCommerceServer;
+    })();
+
+    /***********************
+     * UI Logic
+     ***********************/
+    const server=eCommerceServer.getInstance();
+    server.seedBalance(100000);
+
+    const $grid=document.getElementById('productGrid');
+    const $cart=document.getElementById('cartList');
+    const $total=document.getElementById('cartTotal');
+    const $balance=document.getElementById('userBalance');
+
+    function renderProducts(){
+      $grid.innerHTML='';
+      server.products.forEach(p=>{
+        const card=document.createElement('div');
+        card.className='card';
+        card.innerHTML=`<img src="${p.img}" alt="${p.title}">\n          <h3>${p.title}</h3>\n          <div>₹${p.price}</div>\n          <button class="btn" data-id="${p.id}">Add to Cart</button>`;
+        $grid.appendChild(card);
+      });
+    }
+
+    function renderCart(){
+      $cart.innerHTML='';
+      const items=server.getCartItems();
+      if(items.length===0){
+        $cart.innerHTML='<div class="muted">Cart is empty</div>';
+      }else{
+        items.forEach(it=>{
+          const el=document.createElement('div');
+          el.className='cart-item';
+          el.innerHTML=`<img src="${it.img}"><div>${it.title} × ${it.qty}</div><div>₹${it.price*it.qty}</div>`;
+          $cart.appendChild(el);
+        });
+      }
+      $total.textContent='₹'+server.getTotal();
+      $balance.textContent='Balance: ₹'+server.userBalance;
+    }
+
+    $grid.addEventListener('click',e=>{
+      const btn=e.target.closest('button[data-id]');
+      if(btn){
+        server.addToCart(btn.dataset.id);
+        renderCart();
+      }
+    });
+
+    document.getElementById('checkoutBtn').addEventListener('click',()=>{
+      const res=server.checkout();
+      alert(res.message);
+      renderCart();
+    });
+
+    renderProducts();
+    renderCart();
+  </script>
+</body>
+</html>
